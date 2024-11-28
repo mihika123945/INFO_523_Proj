@@ -1,0 +1,236 @@
+---
+title: "chini_proj"
+output: html_document
+date: "2024-10-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+install.packages("caret")
+library(caret)
+
+# Load data
+data <- read.csv("survey.csv")
+
+# Examine data structure
+str(data)
+summary(data)
+```
+```{r}
+
+head(data$Gender)
+str(data$Gender)
+
+```
+
+```{r}
+# Convert categorical columns to factors
+data$Gender <- as.factor(data$Gender)
+data$family_history <- as.factor(data$family_history)
+data$treatment <- as.factor(data$treatment)
+data$work_interfere <- as.factor(data$work_interfere)
+
+
+```
+
+```{r}
+remove.packages("factoextra")
+install.packages("factoextra")
+library(factoextra)
+
+```
+k-means
+```{r}
+# Define a mode imputation function
+impute_mode <- function(x) {
+  mode_val <- names(sort(table(x), decreasing = TRUE))[1]
+  x[is.na(x)] <- mode_val
+  return(x)
+}
+
+# Apply mode imputation to work_interfere
+data$work_interfere <- impute_mode(data$work_interfere)
+
+# Add "Unknown" category
+# data$work_interfere <- as.character(data$work_interfere)
+# data$work_interfere[is.na(data$work_interfere)] <- "Unknown"
+# data$work_interfere <- as.factor(data$work_interfere)
+
+# Verify missing values are handled
+
+summary(data$work_interfere)
+
+library(dplyr)
+
+# Select and scale relevant features for clustering
+data_scaled <- data %>%
+  select(Age, work_interfere, family_history) %>%
+  mutate_all(as.numeric) %>%  # Convert categorical variables to numeric
+  scale()
+
+library(cluster)
+library(factoextra)
+
+# Perform K-means clustering
+set.seed(123)
+kmeans_result <- kmeans(data_scaled, centers = 3)  # Change 'centers' as needed
+
+# Add cluster assignments to the original dataset
+data$Cluster <- as.factor(kmeans_result$cluster)
+
+# Visualize the clusters
+fviz_cluster(kmeans_result, data = data_scaled, geom = "point", ellipse.type = "euclid") +
+  labs(title = "K-means Clustering Visualization")
+
+data %>%
+  group_by(Cluster) %>%
+  summarize(
+    Avg_Age = mean(Age),
+    Work_Interfere_Mode = names(sort(table(work_interfere), decreasing = TRUE))[1],
+    Family_History_Rate = mean(as.numeric(family_history == "Yes"))
+  )
+
+# Visualize Age distribution
+boxplot(data$Age, main = "Age Distribution", horizontal = TRUE)
+
+# Remove rows with extreme outliers
+data <- data %>% filter(Age < 100)  # Assuming valid ages are below 100
+
+# Re-scale and re-run clustering
+data_scaled <- data %>%
+  select(Age, work_interfere, family_history) %>%
+  mutate_all(as.numeric) %>%
+  scale()
+
+kmeans_result <- kmeans(data_scaled, centers = 3)
+data$Cluster <- as.factor(kmeans_result$cluster)
+
+fviz_cluster(kmeans_result, data = data_scaled, geom = "point", ellipse.type = "euclid") +
+  labs(title = "K-means Clustering Visualization")
+
+#now validating the results..
+# Compute silhouette scores
+silhouette_score <- silhouette(kmeans_result$cluster, dist(data_scaled))
+
+# Plot silhouette scores
+plot(silhouette_score, main = "Silhouette Plot for K-means Clusters")
+
+
+# Average silhouette width
+cat("Average Silhouette Width:", mean(silhouette_score[, 3]), "\n")
+
+# Summarize clusters
+cluster_summary <- data %>%
+  group_by(Cluster) %>%
+  summarize(
+    Avg_Age = mean(Age, na.rm = TRUE),
+    Work_Interfere_Mode = names(sort(table(work_interfere), decreasing = TRUE))[1],
+    Family_History_Rate = mean(as.numeric(family_history == "Yes"), na.rm = TRUE)
+  )
+print(cluster_summary)
+
+```
+
+##Explaination
+
+1. Clustering Visualization
+From the K-means clustering visualization:
+
+Clusters:
+The dataset was divided into three distinct clusters (Cluster 1, Cluster 2, Cluster 3).
+Each cluster is represented by a unique color (red, green, blue) and a different shape in the graph.
+Principal Components (Dimensions):
+The X-axis (Dim1) and Y-axis (Dim2) are derived from Principal Component Analysis (PCA), which reduces the multi-dimensional data (Age, Work Interfere, Family History) into two dimensions to make the clustering results visually interpretable.
+These components explain 36.8% (Dim1) and 33.9% (Dim2) of the variation in the data.
+Observations:
+
+Cluster Separation:
+
+Clusters are moderately well-separated, with distinct groups forming along the principal dimensions. However, there is some overlap, suggesting shared characteristics between certain groups.
+Cluster 3 (blue) is more spread out, indicating higher variability within this group.
+Outliers:
+
+A few data points lie at the edges of their clusters or outside the ellipses, indicating potential outliers.
+2. Cluster Characteristics
+From the summary of clusters:
+
+Cluster	Avg_Age	Work_Interfere_Mode	Family_History_Rate
+1 (Red)	2.03e+08	Sometimes	1 (100%)
+2 (Green)	28.27	Sometimes	0 (0%)
+3 (Blue)	33.75	Never	0 (0%)
+Key Insights:
+
+Cluster 1:
+
+Age: The Avg_Age value (2.03e+08) is clearly incorrect due to data issues during the calculation. Likely, this resulted from an invalid entry (e.g., outliers or data scaling).
+Work Interfere: The most frequent response is "Sometimes", indicating moderate workplace interference.
+Family History: All individuals in this cluster have a family history of mental health issues (100%).
+Interpretation: This cluster might represent employees with familial predisposition to mental health challenges and moderate workplace interference. The data error in Age should be corrected for more precise analysis.
+
+Cluster 2:
+
+Age: The average age is 28.27, indicating this group consists of younger employees.
+Work Interfere: "Sometimes" is the most frequent response, suggesting moderate workplace interference.
+Family History: None of the individuals in this cluster have a family history of mental health issues (0%).
+Interpretation: This cluster represents younger employees without a family history of mental health issues but who still experience some workplace interference.
+
+Cluster 3:
+
+Age: The average age is 33.75, representing slightly older employees compared to Cluster 2.
+Work Interfere: "Never" is the most frequent response, suggesting minimal or no workplace interference.
+Family History: None of the individuals in this cluster have a family history of mental health issues (0%).
+Interpretation: This cluster represents older employees who do not have a family history of mental health issues and report no interference with their work.
+
+Actionable Insights
+Cluster-Based Support:
+
+Cluster 1 (High-risk group): This group may need targeted interventions because all members have a family history of mental health issues and moderate workplace interference. Policies such as enhanced mental health resources or flexible work options could benefit this group.
+Cluster 2 (Younger employees): Although younger and without a family history, this group still reports workplace interference. This could be due to factors like work stress or lack of coping mechanisms, which could be addressed through wellness programs and stress management training.
+Cluster 3 (Low-risk group): This group appears to be the least affected, with no family history and no reported interference. Regular check-ins and awareness programs can maintain their well-being.
+Data Cleaning:
+
+The unusually high average age (2.03e+08) in Cluster 1 is a clear data anomaly, likely due to outliers or errors introduced during scaling or data entry. Cleaning and re-running the analysis would provide more accurate results.
+Further Analysis:
+
+Explore additional factors such as gender, treatment, and company-provided benefits to deepen the understanding of these clusters.
+Investigate the overlap in the clustering visualization to understand shared characteristics between certain groups.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
