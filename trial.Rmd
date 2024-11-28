@@ -200,28 +200,459 @@ Further Analysis:
 Explore additional factors such as gender, treatment, and company-provided benefits to deepen the understanding of these clusters.
 Investigate the overlap in the clustering visualization to understand shared characteristics between certain groups.
 
+##
+1. Analyze Cluster Characteristics
+
+Purpose:
+
+Understand the profiles of individuals in each cluster to draw actionable insights. This includes analyzing key variables (e.g., age, workplace interference, family history).
+
+Steps:
+
+	1.	Summarize Key Attributes for Each Cluster:
+	•	Use descriptive statistics to find the average, mode, or proportion of key attributes in each cluster.
+
+```{r}
+data %>%
+  group_by(Cluster) %>%
+  summarize(
+    Avg_Age = mean(Age, na.rm = TRUE),
+    Work_Interfere_Mode = names(sort(table(work_interfere), decreasing = TRUE))[1],
+    Family_History_Rate = mean(as.numeric(family_history == "Yes"), na.rm = TRUE)
+  )
+```
+2.	Visualize the Results:
+	•	Create bar plots or boxplots to visually compare clusters across key attributes.
+```{r}
+library(ggplot2)
+
+ggplot(data, aes(x = Cluster, y = Age, fill = Cluster)) +
+  geom_boxplot() +
+  labs(title = "Age Distribution by Cluster", x = "Cluster", y = "Age")
+
+ggplot(data, aes(x = Cluster, fill = work_interfere)) +
+  geom_bar(position = "fill") +
+  labs(title = "Work Interference by Cluster", x = "Cluster", y = "Proportion")
+```
+Association Rule Mining
+
+Purpose:
+
+Discover relationships between variables such as family history, workplace support, and treatment-seeking behavior.
+
+Steps:
+
+	1.	Prepare Data for Association Rule Mining:
+	•	Select relevant categorical columns.
+	•	Convert these columns to a transactions object.
+	
+```{r}
+install.packages("arulesViz")
+library(arules)
+library(arulesViz)
+library(dplyr)
+
+# Select relevant columns and convert to factors
+data_arules <- data |>
+  select(family_history, treatment, care_options, work_interfere) |>
+  mutate(across(everything(), as.factor))
+
+# Convert to transactions
+data_transactions <- as(data_arules, "transactions")
+```
+
+	2.	Generate Association Rules:
+	•	Use the apriori algorithm to find frequent patterns and rules.
+
+```{r}
+rules <- apriori(data_transactions, parameter = list(supp = 0.1, conf = 0.8))
+inspect(head(rules))
+plot(rules, method = "graph", control = list(type = "items"))
+```
+Insights from the Visualization
+
+	1.	High-Support Nodes:
+	•	Nodes such as family_history=No and work_interfere=Never have larger sizes, indicating these conditions are more frequent in the dataset.
+	2.	Strong Associations:
+	•	Rules such as family_history=Yes → treatment=Yes have darker red edges, indicating a strong lift. This suggests that individuals with a family history of mental health issues are more likely to seek treatment.
+	•	Similarly, care_options=Yes → treatment=Yes indicates a strong link between the availability of mental health care options and seeking treatment.
+	3.	Weak Associations:
+	•	Edges with lighter colors have lower lift values, indicating weaker or less significant associations.
+	•	For example, work_interfere=Never → care_options=Not sure suggests a weaker relationship.
+	4.	Notable Combinations:
+	•	The rule family_history=Yes → treatment=Yes seems to be one of the most significant in the dataset, as indicated by its size and lift.
+	•	The absence of mental health care options (care_options=No) is associated with treatment=No, reinforcing the importance of workplace support.
+	
+	
+Next Steps
+
+	1.	Analyze Strong Rules:
+	•	Inspect and summarize the strongest association rules based on lift:	
+```{r}
+inspect(sort(rules, by = "lift")[1:5])  # View the top 5 rules by lift
+```
+	1.	LHS (Left-hand Side):
+	•	The condition or set of items in the rule (e.g., {family_history=No, work_interfere=Never}).
+	2.	RHS (Right-hand Side):
+	•	The consequence or outcome predicted by the rule (e.g., {treatment=No}).
+	3.	Metrics:
+	•	Support:
+	•	Proportion of rows in the dataset that satisfy both LHS and RHS.
+	•	Example: A support of 0.124 means 12.4% of the dataset satisfies the rule.
+	•	Confidence:
+	•	Proportion of rows satisfying LHS that also satisfy RHS.
+	•	Example: A confidence of 0.89 means 89% of individuals meeting the LHS condition also meet the RHS condition.
+	•	Lift:
+	•	Indicates how much more likely RHS is to occur when LHS is present compared to random chance.
+	•	Lift > 1 suggests a strong positive association.
+	•	Coverage:
+	•	Proportion of rows satisfying the LHS condition only.
+	
+Rule Insights
+
+Rule 1
+
+	•	Rule: {family_history=No, work_interfere=Never} → {treatment=No}
+	•	Support: 0.124 (12.4% of the dataset satisfies this rule).
+	•	Confidence: 0.89 (89% of individuals with no family history and no workplace interference did not seek treatment).
+	•	Lift: 1.80 (These individuals are 1.8 times more likely to not seek treatment compared to random chance).
+
+Interpretation:
+	•	Employees with no family history and no workplace interference are significantly less likely to seek treatment. This suggests that employees not directly affected by family history or workplace stress may undervalue mental health resources.
+	
+Rule 2
+
+	•	Rule: {work_interfere=Never} → {treatment=No}
+	•	Support: 0.145 (14.5% of the dataset satisfies this rule).
+	•	Confidence: 0.86 (86% of individuals reporting no workplace interference did not seek treatment).
+	•	Lift: 1.74 (This behavior is 1.74 times more likely than random chance).
+
+Interpretation:
+	•	Individuals with no workplace interference are highly unlikely to seek treatment. This reinforces the importance of workplace mental health awareness campaigns for individuals who may not feel immediate interference.
+	
+Rule 3
+
+	•	Rule: {family_history=Yes, care_options=Yes} → {treatment=Yes}
+	•	Support: 0.140 (14% of the dataset satisfies this rule).
+	•	Confidence: 0.84 (84% of individuals with a family history and access to care options sought treatment).
+	•	Lift: 1.67 (This is 1.67 times more likely than random chance).
+
+Interpretation:
+	•	Employees with both a family history of mental health issues and access to care options are significantly more likely to seek treatment. This highlights the importance of workplace-provided care options in encouraging treatment.
+	
+Rule 4
+
+	•	Rule: {treatment=No, work_interfere=Never} → {family_history=No}
+	•	Support: 0.124 (12.4% of the dataset satisfies this rule).
+	•	Confidence: 0.85 (85% of individuals who did not seek treatment and reported no workplace interference also had no family history).
+	•	Lift: 1.40 (This is 1.4 times more likely than random chance).
+
+Interpretation:
+	•	Employees without a family history are unlikely to seek treatment, especially if they also experience no workplace interference. This suggests that these employees might perceive mental health treatment as unnecessary.
+	
+Rule 5
+
+	•	Rule: {treatment=No, care_options=Not sure} → {family_history=No}
+	•	Support: 0.125 (12.5% of the dataset satisfies this rule).
+	•	Confidence: 0.83 (83% of individuals who did not seek treatment and were unsure about care options also had no family history).
+	•	Lift: 1.35 (This is 1.35 times more likely than random chance).
+
+Interpretation:
+	•	Employees unsure about the availability of care options and without a family history are less likely to seek treatment. This suggests that increasing awareness about mental health resources could improve treatment-seeking behavior.
+	
+Key Takeaways
+
+	1.	Influence of Workplace Interference:
+	•	Employees reporting no workplace interference (work_interfere=Never) are consistently less likely to seek treatment. This indicates a need for proactive outreach to individuals who may not feel workplace stress but could still benefit from mental health resources.
+	2.	Role of Family History:
+	•	A family history of mental health issues significantly influences treatment-seeking behavior, especially when paired with access to care options.
+	3.	Impact of Care Options:
+	•	Employees with access to care options are more likely to seek treatment, highlighting the importance of making these options visible and accessible.
+	4.	Awareness and Education:
+	•	Employees who are “not sure” about care options are less likely to seek treatment, suggesting a need for better communication and awareness of available mental health resources.
+	
+	3.	Visualize Subsets of Rules:
+	•	Visualize only the strongest rules or a specific subset for clarity:
+	
+```{r}
+strong_rules <- subset(rules, lift > 1.5 & confidence > 0.8)
+plot(strong_rules, method = "graph", control = list(type = "items"))
+```
+
+Actionable Recommendations
+
+1. Increase Awareness and Accessibility of Care Options
+
+	•	Why: Employees with access to care options are more likely to seek treatment.
+	•	How:
+	•	Create visible communication campaigns (e.g., posters, emails, newsletters) to raise awareness about the availability of mental health resources.
+	•	Provide easy access to mental health benefits through a centralized portal or HR contact point.
+
+2. Target High-Risk Groups (Family History)
+
+	•	Why: Employees with a family history of mental health issues are more likely to seek treatment and benefit from interventions.
+	•	How:
+	•	Offer tailored support programs, such as counseling sessions or stress management workshops, specifically for individuals with family history.
+	•	Introduce anonymous self-assessment tools to encourage at-risk employees to seek help.
+
+3. Address Employees with No Workplace Interference
+
+	•	Why: Employees reporting no interference are less likely to seek treatment, possibly due to lower perceived need for mental health resources.
+	•	How:
+	•	Educate employees about the importance of mental health maintenance, even for those who feel unaffected.
+	•	Integrate mental health training into broader wellness initiatives to normalize treatment-seeking behavior.
+
+4. Improve Communication Around Mental Health Resources
+
+	•	Why: Employees unsure about care options are less likely to seek treatment, reflecting a communication gap.
+	•	How:
+	•	Regularly update employees on available care options through webinars, town halls, and Q&A sessions.
+	•	Provide clear, concise brochures or guides outlining mental health resources and how to access them.
+
+5. Leverage Workplace Policies to Normalize Treatment
+
+	•	Why: Employees may hesitate to seek treatment due to stigma or fear of professional consequences.
+	•	How:
+	•	Create policies ensuring confidentiality for employees seeking mental health support.
+	•	Foster a supportive environment by training managers to recognize and address mental health concerns without judgment.
+	
+	
+Integrating Recommendations into Classification Analysis
+Feature Engineering
+
+Incorporate key insights and predictors into the dataset:
+	Ensure categorical variables like family_history, work_interfere, and care_options are converted to factors:
+```{r}
+data$Cluster <- as.factor(kmeans_result$cluster)#	Add Cluster assignments from the clustering analysis as a feature
+data <- data %>%
+  mutate(
+    family_history = as.factor(family_history),
+    work_interfere = as.factor(work_interfere),
+    care_options = as.factor(care_options),
+    treatment = as.factor(treatment)  # Ensure treatment is the target variable
+  )
+#Split the data into training (70%) and testing (30%) sets
+library(caret)
+# Clean and consolidate Gender variable before splitting
+data$Gender <- recode(data$Gender, "cis male" = "Male", "cis female" = "Female", .default = "Other")
+data$Gender <- as.factor(data$Gender)
+
+# Split the data
+trainIndex <- createDataPartition(data$treatment, p = 0.7, list = FALSE)
+train <- data[trainIndex, ]
+test <- data[-trainIndex, ]
+```
+#Logistic regression
+```{r}
+install.packages("forcats")
+library(forcats)
+# Train logistic regression model
+log_model <- glm(
+  treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
+  data = train,
+  family = "binomial"
+)
+
+# Summarize the model
+summary(log_model)
+# Match levels of Gender in test data to those in training data
+test$Gender <- factor(test$Gender, levels = levels(train$Gender))
+# Group unknown levels as "Other"
+train$Gender <- fct_lump(train$Gender, n = 10)  # Keep the top 10 most common levels
+test$Gender <- fct_lump(test$Gender, n = 10)
+
+# Predict on the test data
+log_predicted <- predict(log_model, test, type = "response")
+log_predicted_class <- ifelse(log_predicted > 0.5, "Yes", "No")
+log_predicted_class <- as.factor(log_predicted_class)
+```
+#Random forest
+```{r}
+install.packages("randomForest")
+library(randomForest)
+# Train random forest model
+rf_model <- randomForest(
+  treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
+  data = train,
+  ntree = 100
+)
+
+# Predict on the test data
+rf_predicted <- predict(rf_model, test)
+print(rf_predicted) 
+```
+Evaluate Model Performance
+
+a. Confusion Matrix
+```{r}
+library(caret)
+# Logistic Regression
+confusionMatrix(log_predicted_class, test$treatment)
+
+# Random Forest
+confusionMatrix(rf_predicted, test$treatment)
+```
+ROC curve and AUC
+```{r}
+# Install and load required packages
+if (!require("ROCR")) install.packages("ROCR", repos = "http://cran.us.r-project.org")
+library(ROCR)
+library(dplyr)
+
+# Step 1: Inspect Predictions and True Labels
+# Ensure predictions and true labels are clean and consistent
+print("Inspecting Predictions and True Labels...")
+str(log_predicted_class)
+table(log_predicted_class, useNA = "ifany")
+
+str(test$treatment)
+table(test$treatment, useNA = "ifany")
+
+# Step 2: Clean Predictions
+log_predicted_class <- as.character(log_predicted_class)
+log_predicted_class[log_predicted_class == ""] <- NA  # Handle empty strings
+log_predicted_class <- as.factor(log_predicted_class)
+log_predicted_numeric <- as.numeric(log_predicted_class)
+
+# Step 3: Clean True Labels
+test$treatment <- as.character(test$treatment)
+test$treatment[test$treatment == ""] <- NA  # Handle empty strings
+test$treatment <- as.factor(test$treatment)
+test_treatment_numeric <- as.numeric(test$treatment)
+
+# Step 4: Handle Missing Values
+if (any(is.na(log_predicted_numeric)) | any(is.na(test_treatment_numeric))) {
+  print("Handling Missing Values in Predictions and True Labels...")
+  complete_cases <- !is.na(log_predicted_numeric) & !is.na(test_treatment_numeric)
+  log_predicted_numeric <- log_predicted_numeric[complete_cases]
+  test_treatment_numeric <- test_treatment_numeric[complete_cases]
+}
+
+# Step 5: Check Data Consistency
+print("Re-checking for Missing Values...")
+cat("Missing values in predictions:", sum(is.na(log_predicted_numeric)), "\n")
+cat("Missing values in true labels:", sum(is.na(test_treatment_numeric)), "\n")
+
+# Step 6: Compute ROC and AUC
+# Create prediction object for ROC analysis
+pred <- prediction(log_predicted_numeric, test_treatment_numeric)
+
+# Generate performance metrics for ROC
+perf <- performance(pred, "tpr", "fpr")
+
+# Plot ROC Curve
+plot(perf, col = "blue", main = "ROC Curve for Logistic Regression")
+abline(a = 0, b = 1, lty = 2, col = "red")  # Add diagonal reference line
+
+# Calculate AUC
+auc <- performance(pred, measure = "auc")
+cat("Logistic Regression AUC:", auc@y.values[[1]], "\n")
+```
+Analyze Results and Incorporate Recommendations
+
+a. Interpret Feature Importance
+
+	•	Use feature importance to understand which predictors drive treatment-seeking behavior:
+```{r}
+# Load necessary library
+library(randomForest)
+
+# Step 1: Train Random Forest Model with Importance
+rf_model <- randomForest(
+  treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
+  data = train,
+  ntree = 100,
+  importance = TRUE
+)
+
+# Step 2: Extract Feature Importance
+importance_values <- importance(rf_model)
+
+# Print the feature importance values
+cat("Feature Importance Values:\n")
+print(importance_values)
+
+# Step 3: Visualize Feature Importance
+varImpPlot(rf_model, main = "Feature Importance")
+```
+#Wieghted average ensemble
+```{r}
+# Combine Logistic Regression and Random Forest Predictions
+# Logistic regression predicted probabilities
+log_probs <- predict(log_model, newdata = test, type = "response")
+
+# Random forest predicted probabilities
+rf_probs <- predict(rf_model, newdata = test, type = "prob")[, 2]  # Probability for "Yes"
+
+# Weighted average of probabilities
+# Assign weights: 0.6 for logistic regression, 0.4 for random forest
+combined_probs <- 0.6 * log_probs + 0.4 * rf_probs
+
+# Convert combined probabilities to class predictions
+combined_predictions <- ifelse(combined_probs > 0.5, "Yes", "No")
+combined_predictions <- as.factor(combined_predictions)
+
+# Evaluate Ensemble Predictions
+# Confusion Matrix
+library(caret)
+conf_matrix_ensemble <- confusionMatrix(combined_predictions, test$treatment)
+print(conf_matrix_ensemble)
+
+# ROC Curve and AUC for Ensemble
+library(ROCR)
+pred_ensemble <- prediction(combined_probs, as.numeric(test$treatment == "Yes"))
+perf_ensemble <- performance(pred_ensemble, "tpr", "fpr")
+
+# Plot ROC Curve
+plot(perf_ensemble, col = "blue", main = "ROC Curve for Ensemble Model")
+abline(a = 0, b = 1, lty = 2, col = "red")  # Add diagonal reference line
+
+# Calculate AUC
+auc_ensemble <- performance(pred_ensemble, measure = "auc")
+cat("Ensemble Model AUC:", auc_ensemble@y.values[[1]], "\n")
+```
+	1.	Accuracy:
+	•	The ensemble model achieved an accuracy of 76.06%, which is an improvement compared to the standalone Logistic Regression and Random Forest models.
+	2.	AUC (Area Under the ROC Curve):
+	•	The ensemble model produced an AUC of 0.797, reflecting strong predictive power.
+	•	This indicates that the ensemble model is better at distinguishing between individuals likely to seek treatment and those who are not.
+	3.	Balanced Accuracy:
+	•	The ensemble’s balanced accuracy (76.03%) shows it performs well for both classes (Yes and No), addressing potential imbalances in the data.
+	
+2. Confusion Matrix Analysis
+
+	•	True Positives (TP): 135 cases were correctly classified as No (individuals who didn’t seek treatment).
+	•	True Negatives (TN): 151 cases were correctly classified as Yes (individuals who sought treatment).
+	•	False Positives (FP): 51 cases were incorrectly classified as Yes when they were actually No.
+	•	False Negatives (FN): 39 cases were incorrectly classified as No when they were actually Yes.
+
+Metrics Derived:
+
+	•	Sensitivity (Recall): 72.58%
+	•	The model correctly identified 72.58% of individuals who did not seek treatment (Class No).
+	•	Specificity: 79.47%
+	•	The model correctly identified 79.47% of individuals who sought treatment (Class Yes).
+	•	Positive Predictive Value (PPV): 77.59%
+	•	Among individuals predicted to seek treatment, 77.59% were correctly classified.
+	•	Negative Predictive Value (NPV): 74.75%
+	•	Among individuals predicted not to seek treatment, 74.75% were correctly classified.
 
 
+Key Predictors Identified
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Based on feature importance:
+	1.	Work Interference:
+	•	Individuals experiencing frequent (Often) or occasional (Sometimes) interference at work are more likely to seek treatment.
+	2.	Family History:
+	•	Having a family history of mental illness is a strong predictor of treatment-seeking behavior.
+	3.	Care Options:
+	•	The availability of care options at work (or lack thereof) significantly influences whether individuals seek treatment.
+	4.	Clusters:
+	•	The clustering feature captures behavioral groups, potentially adding nuance to the model.
+	5.	Age:
+	•	Surprisingly, the contribution of Age is minimal, as indicated by low importance scores.
+	6.	Gender:
+	•	Gender contributions appear insignificant (possibly due to inconsistent or unclear gender labels in the dataset).
 
 
 
