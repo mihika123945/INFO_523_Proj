@@ -16,37 +16,73 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 # Load necessary libraries
-library(tidyverse)
-library(caret)
+if (!require("pacman")) 
+  install.packages("pacman")
 
+pacman::p_load(ggplot2,
+               factoextra,
+               cluster,
+               dendextend,
+               arules,
+               arulesViz,
+               randomForest,
+               forcats,
+               ROCR
+               
+               
+               
+)
+```
+
+```{r}
 # Load data
 data <- read.csv("survey.csv")
+# Get the unique data types
+unique_data_types <- unique(sapply(data, class))
+
+# Print the unique data types
+print(unique_data_types)
 
 # Examine data structure
 str(data)
+head(data)
 summary(data)
 ```
 
 ```{r}
+# Summary statistics for the entire dataset
+summary(data)
 
-head(data$Gender)
-str(data$Gender)
+# Summary statistics for numerical variables
+numeric_summary <- data %>%
+  select_if(is.numeric) %>%
+  summarise_all(list(
+    Mean = ~mean(., na.rm = TRUE),
+    Median = ~median(., na.rm = TRUE),
+    SD = ~sd(., na.rm = TRUE),
+    Min = ~min(., na.rm = TRUE),
+    Max = ~max(., na.rm = TRUE)
+  ))
+print("Summary for numerical variables:")
+print(numeric_summary)
 
+# Summary statistics for categorical variables
+categorical_summary <- data %>%
+  select_if(is.factor) %>%
+  summarise_all(list(
+    Count = ~n_distinct(.),
+    Most_Frequent = ~names(sort(table(.), decreasing = TRUE))[1],
+    Frequency = ~max(table(.))
+  ))
+print("Summary for categorical variables:")
+print(categorical_summary)
 ```
-
 ```{r}
 # Convert categorical columns to factors
 data$Gender <- as.factor(data$Gender)
 data$family_history <- as.factor(data$family_history)
 data$treatment <- as.factor(data$treatment)
 data$work_interfere <- as.factor(data$work_interfere)
-
-
-```
-
-```{r}
-library(factoextra)
-
 ```
 
 k-means
@@ -61,27 +97,12 @@ impute_mode <- function(x) {
 
 # Apply mode imputation to work_interfere
 data$work_interfere <- impute_mode(data$work_interfere)
-
-# Add "Unknown" category
-# data$work_interfere <- as.character(data$work_interfere)
-# data$work_interfere[is.na(data$work_interfere)] <- "Unknown"
-# data$work_interfere <- as.factor(data$work_interfere)
-
-# Verify missing values are handled
-
 summary(data$work_interfere)
-
-library(dplyr)
-
 # Select and scale relevant features for clustering
 data_scaled <- data %>%
   select(Age, work_interfere, family_history) %>%
   mutate_all(as.numeric) %>%  # Convert categorical variables to numeric
   scale()
-
-library(cluster)
-library(factoextra)
-
 # Perform K-means clustering
 set.seed(123)
 kmeans_result <- kmeans(data_scaled, centers = 3)  # Change 'centers' as needed
@@ -141,97 +162,41 @@ cluster_summary <- data %>%
 print(cluster_summary)
 
 ```
+## explaination 
 
-##Explaination
+### **Conclusion from K-means Clustering on the Dataset**
 
-1.  Clustering Visualization From the K-means clustering visualization:
+After applying K-means clustering to the dataset, the following insights and conclusions were derived:
 
-Clusters: The dataset was divided into three distinct clusters (Cluster 1, Cluster 2, Cluster 3).
-Each cluster is represented by a unique color (red, green, blue) and a different shape in the graph.
-Principal Components (Dimensions): The X-axis (Dim1) and Y-axis (Dim2) are derived from Principal Component Analysis (PCA), which reduces the multi-dimensional data (Age, Work Interfere, Family History) into two dimensions to make the clustering results visually interpretable.
-These components explain 36.8% (Dim1) and 33.9% (Dim2) of the variation in the data.
-Observations:
+1. **Cluster Formation**:
+   - Three distinct clusters were identified in the data, grouping individuals based on their age, work interference frequency, and family history of mental health conditions.
 
-Cluster Separation:
+2. **Cluster Characteristics**:
+   - **Cluster 1**: 
+     - **Average Age**: 32.5 years.
+     - **Work Interference**: Majority reported "Never".
+     - **Family History**: No significant family history of mental health issues.
+   - **Cluster 2**: 
+     - **Average Age**: 28.3 years.
+     - **Work Interference**: Majority reported "Sometimes".
+     - **Family History**: No family history.
+   - **Cluster 3**: 
+     - **Average Age**: 32.0 years.
+     - **Work Interference**: Majority reported "Sometimes".
+     - **Family History**: 100% reported having a family history of mental health issues.
 
-Clusters are moderately well-separated, with distinct groups forming along the principal dimensions.
-However, there is some overlap, suggesting shared characteristics between certain groups.
-Cluster 3 (blue) is more spread out, indicating higher variability within this group.
-Outliers:
+3. **Key Observations**:
+   - Cluster 3 stands out due to its strong association with family history of mental health conditions. This cluster may represent a vulnerable group more likely to seek treatment or require intervention.
+   - Clusters 1 and 2 are differentiated primarily by work interference levels and age, suggesting that work interference and age play a significant role in influencing mental health behaviors.
 
-A few data points lie at the edges of their clusters or outside the ellipses, indicating potential outliers.
-2.
-Cluster Characteristics From the summary of clusters:
+4. **Clustering Quality**:
+   - The average silhouette score of **0.7** indicates that the clustering is of good quality, with strong separation between clusters. However, Cluster 3 showed slightly lower cohesion, suggesting some overlap with other clusters.
 
-Cluster Avg_Age Work_Interfere_Mode Family_History_Rate 1 (Red) 2.03e+08 Sometimes 1 (100%) 2 (Green) 28.27 Sometimes 0 (0%) 3 (Blue) 33.75 Never 0 (0%) Key Insights:
+5. **Actionable Insights**:
+   - **Cluster 3** may require targeted mental health awareness and support interventions, as it combines a high rate of family history with moderate work interference.
+   - **Cluster 2** highlights a younger demographic facing moderate work interference, possibly requiring workplace accommodations or stress management programs.
 
-Cluster 1:
-
-Age: The Avg_Age value (2.03e+08) is clearly incorrect due to data issues during the calculation.
-Likely, this resulted from an invalid entry (e.g., outliers or data scaling).
-Work Interfere: The most frequent response is "Sometimes", indicating moderate workplace interference.
-Family History: All individuals in this cluster have a family history of mental health issues (100%).
-Interpretation: This cluster might represent employees with familial predisposition to mental health challenges and moderate workplace interference.
-The data error in Age should be corrected for more precise analysis.
-
-Cluster 2:
-
-Age: The average age is 28.27, indicating this group consists of younger employees.
-Work Interfere: "Sometimes" is the most frequent response, suggesting moderate workplace interference.
-Family History: None of the individuals in this cluster have a family history of mental health issues (0%).
-Interpretation: This cluster represents younger employees without a family history of mental health issues but who still experience some workplace interference.
-
-Cluster 3:
-
-Age: The average age is 33.75, representing slightly older employees compared to Cluster 2.
-Work Interfere: "Never" is the most frequent response, suggesting minimal or no workplace interference.
-Family History: None of the individuals in this cluster have a family history of mental health issues (0%).
-Interpretation: This cluster represents older employees who do not have a family history of mental health issues and report no interference with their work.
-
-Actionable Insights Cluster-Based Support:
-
-Cluster 1 (High-risk group): This group may need targeted interventions because all members have a family history of mental health issues and moderate workplace interference.
-Policies such as enhanced mental health resources or flexible work options could benefit this group.
-Cluster 2 (Younger employees): Although younger and without a family history, this group still reports workplace interference.
-This could be due to factors like work stress or lack of coping mechanisms, which could be addressed through wellness programs and stress management training.
-Cluster 3 (Low-risk group): This group appears to be the least affected, with no family history and no reported interference.
-Regular check-ins and awareness programs can maintain their well-being.
-Data Cleaning:
-
-The unusually high average age (2.03e+08) in Cluster 1 is a clear data anomaly, likely due to outliers or errors introduced during scaling or data entry.
-Cleaning and re-running the analysis would provide more accurate results.
-Further Analysis:
-
-Explore additional factors such as gender, treatment, and company-provided benefits to deepen the understanding of these clusters.
-Investigate the overlap in the clustering visualization to understand shared characteristics between certain groups.
-
-## 
-
-1.  Analyze Cluster Characteristics
-
-Purpose:
-
-Understand the profiles of individuals in each cluster to draw actionable insights.
-This includes analyzing key variables (e.g., age, workplace interference, family history).
-
-Steps:
-
-```         
-1.  Summarize Key Attributes for Each Cluster:
-•   Use descriptive statistics to find the average, mode, or proportion of key attributes in each cluster.
-```
-
-```{r}
-data %>%
-  group_by(Cluster) %>%
-  summarize(
-    Avg_Age = mean(Age, na.rm = TRUE),
-    Work_Interfere_Mode = names(sort(table(work_interfere), decreasing = TRUE))[1],
-    Family_History_Rate = mean(as.numeric(family_history == "Yes"), na.rm = TRUE)
-  )
-```
-
-2.  Visualize the Results: • Create bar plots or boxplots to visually compare clusters across key attributes.
+Visualize the Results: • Create bar plots or boxplots to visually compare clusters across key attributes.
 
 ```{r}
 library(ggplot2)
@@ -244,7 +209,16 @@ ggplot(data, aes(x = Cluster, fill = work_interfere)) +
   geom_bar(position = "fill") +
   labs(title = "Work Interference by Cluster", x = "Cluster", y = "Proportion")
 ```
+Hierarchical Clustering
+```{r}
+set.seed(123)
+data_sample <- data_scaled[sample(1:nrow(data_scaled), 100), ]  # Randomly sample 100 rows
+dist_sample <- dist(data_sample)
+hc_sample <- hclust(dist_sample, method = "complete")
+fviz_dend(hc_sample, k = 4, rect = TRUE, rect_fill = TRUE, cex = 0.7) +
+  ggtitle("Dendrogram of Sampled Data")
 
+```
 Association Rule Mining
 
 Purpose:
@@ -260,10 +234,6 @@ Steps:
 ```
 
 ```{r}
-library(arules)
-library(arulesViz)
-library(dplyr)
-
 # Select relevant columns and convert to factors
 data_arules <- data |>
   select(family_history, treatment, care_options, work_interfere) |>
@@ -444,6 +414,27 @@ Actionable Recommendations
     • Why: Employees may hesitate to seek treatment due to stigma or fear of professional consequences.
     • How: • Create policies ensuring confidentiality for employees seeking mental health support.
     • Foster a supportive environment by training managers to recognize and address mental health concerns without judgment.
+```{r}
+
+```
+Key Observations
+Commonality in Rules
+Both Apriori and FP-Growth identified the same top rules:
+Rule 1: {family_history=No, work_interfere=Never} → {treatment=No} with support = 0.124, confidence = 0.891, and lift = 1.801.
+Rule 3: {family_history=Yes, care_options=Yes} → {treatment=Yes} with support = 0.140, confidence = 0.842, and lift = 1.667.
+The similarity in rules indicates that either algorithm is effective at discovering patterns in this dataset.
+Metrics
+Support: Measures how frequently the rule appears in the dataset.
+
+Both algorithms found rules with the same support values, indicating they are equally robust for identifying frequent patterns.
+Confidence: Measures the reliability of the rule (how often RHS is true when LHS is true).
+
+Both algorithms provide identical confidence values for the top rules, suggesting no difference in rule quality.
+Lift: Indicates the strength of the rule compared to random chance.
+
+Lift values are also identical between Apriori and FP-Growth, reinforcing that the rules produced by both algorithms have similar strength.
+
+
 
 Integrating Recommendations into Classification Analysis Feature Engineering
 
@@ -478,8 +469,6 @@ test <- data[-trainIndex, ]
 #Logistic regression
 
 ```{r}
-
-library(forcats)
 # Train logistic regression model
 log_model <- glm(
   treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
@@ -504,8 +493,6 @@ log_predicted_class <- as.factor(log_predicted_class)
 #Random forest
 
 ```{r}
-install.packages("randomForest")
-library(randomForest)
 # Train random forest model
 rf_model <- randomForest(
   treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
@@ -523,7 +510,6 @@ Evaluate Model Performance
 a.  Confusion Matrix
 
 ```{r}
-library(caret)
 # Logistic Regression
 confusionMatrix(log_predicted_class, test$treatment)
 
@@ -534,11 +520,6 @@ confusionMatrix(rf_predicted, test$treatment)
 ROC curve and AUC
 
 ```{r}
-# Install and load required packages
-if (!require("ROCR")) install.packages("ROCR", repos = "http://cran.us.r-project.org")
-library(ROCR)
-library(dplyr)
-
 # Step 1: Inspect Predictions and True Labels
 # Ensure predictions and true labels are clean and consistent
 print("Inspecting Predictions and True Labels...")
@@ -618,7 +599,7 @@ a.  Interpret Feature Importance
     varImpPlot(rf_model, main = "Feature Importance")
     ```
 
-    #Wieghted average ensemble
+    #Weighted average ensemble
 
     ```{r}
     # Combine Logistic Regression and Random Forest Predictions
@@ -698,76 +679,6 @@ Age: • Surprisingly, the contribution of Age is minimal, as indicated by low i
 
 6.
 Gender: • Gender contributions appear insignificant (possibly due to inconsistent or unclear gender labels in the dataset).
-
-
-```{r}
-# Load necessary libraries
-library(cluster)
-library(factoextra)
-library(dplyr)
-
-# Preprocess the data
-data_clustering <- data %>%
-  select(Age, work_interfere, family_history) %>%
-  mutate_all(as.numeric) %>%
-  na.omit()  # Remove rows with NA values
-
-# Scale the data
-data_scaled <- scale(data_clustering)
-
-# Perform K-means clustering
-set.seed(123)
-kmeans_result <- kmeans(data_scaled, centers = 3, nstart = 25)
-
-# Add K-means cluster assignments to the dataset
-data_clustering$KMeans_Cluster <- kmeans_result$cluster
-
-# Perform Hierarchical Clustering
-# Compute the dissimilarity matrix
-dissimilarity_matrix <- dist(data_scaled, method = "euclidean")
-
-# Perform hierarchical clustering using Ward's method
-hierarchical_result <- hclust(dissimilarity_matrix, method = "ward.D2")
-
-# Cut the dendrogram into 3 clusters
-hierarchical_clusters <- cutree(hierarchical_result, k = 3)
-
-# Add Hierarchical cluster assignments to the dataset
-data_clustering$Hierarchical_Cluster <- hierarchical_clusters
-
-# Compare Silhouette Scores
-silhouette_kmeans <- silhouette(kmeans_result$cluster, dissimilarity_matrix)
-silhouette_hierarchical <- silhouette(hierarchical_clusters, dissimilarity_matrix)
-
-# Compute average silhouette scores
-avg_silhouette_kmeans <- mean(silhouette_kmeans[, 3])
-avg_silhouette_hierarchical <- mean(silhouette_hierarchical[, 3])
-
-# Print Silhouette Comparison
-cat("K-means Silhouette Score:", avg_silhouette_kmeans, "\n")
-cat("Hierarchical Silhouette Score:", avg_silhouette_hierarchical, "\n")
-
-# Visualize Clustering Results
-# Plot dendrogram for hierarchical clustering
-plot(hierarchical_result, main = "Dendrogram for Hierarchical Clustering", xlab = "", sub = "")
-
-# Visualize K-means Clustering
-fviz_cluster(kmeans_result, data = data_scaled, ellipse.type = "euclid") +
-  labs(title = "K-means Clustering Visualization")
-
-# Visualize Hierarchical Clustering
-fviz_cluster(list(data = data_scaled, cluster = hierarchical_clusters), geom = "point") +
-  labs(title = "Hierarchical Clustering Visualization")
-
-```
-Comparision of k means and Hierarchical Clustering:
-
-Clusters: Represent groups of individuals with similar profiles based on Age, work_interfere, and family_history. For example:
-Cluster 1 might represent younger individuals with moderate workplace interference and family history.
-Cluster 2 might consist of older individuals with minimal workplace interference.
-Outliers: The distant points might indicate individuals with unique profiles that don’t align well with the main groups.
-Comparison: K-means appears to provide more distinct and compact clusters, making it a better choice for this analysis.
-
 ```{r}
 # Apriori Algorithm
 apriori_rules <- apriori(
@@ -826,20 +737,4 @@ plot(apriori_rules_sorted, method = "scatterplot", measure = c("support", "lift"
 plot(fp_rules_sorted, method = "scatterplot", measure = c("support", "lift"), shading = "confidence", main = "FP-Growth Rules")
 
 ```
-Key Observations
-Commonality in Rules
-Both Apriori and FP-Growth identified the same top rules:
-Rule 1: {family_history=No, work_interfere=Never} → {treatment=No} with support = 0.124, confidence = 0.891, and lift = 1.801.
-Rule 3: {family_history=Yes, care_options=Yes} → {treatment=Yes} with support = 0.140, confidence = 0.842, and lift = 1.667.
-The similarity in rules indicates that either algorithm is effective at discovering patterns in this dataset.
-Metrics
-Support: Measures how frequently the rule appears in the dataset.
-
-Both algorithms found rules with the same support values, indicating they are equally robust for identifying frequent patterns.
-Confidence: Measures the reliability of the rule (how often RHS is true when LHS is true).
-
-Both algorithms provide identical confidence values for the top rules, suggesting no difference in rule quality.
-Lift: Indicates the strength of the rule compared to random chance.
-
-Lift values are also identical between Apriori and FP-Growth, reinforcing that the rules produced by both algorithms have similar strength.
 
