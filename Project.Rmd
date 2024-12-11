@@ -1,5 +1,6 @@
 ---
-title: "chini_proj"
+title: "Mental Health Analytics in Work Place"
+author: "Jayneet Jain,Mihika kubadia,Spoorthy Nagendra"
 output:
   word_document: default
   html_document: default
@@ -27,7 +28,10 @@ pacman::p_load(ggplot2,
                arulesViz,
                randomForest,
                forcats,
-               ROCR
+               ROCR,
+               dplyr,
+               caret,
+               randomForest
                
                
                
@@ -199,8 +203,6 @@ After applying K-means clustering to the dataset, the following insights and con
 Visualize the Results: • Create bar plots or boxplots to visually compare clusters across key attributes.
 
 ```{r}
-library(ggplot2)
-
 ggplot(data, aes(x = Cluster, y = Age, fill = Cluster)) +
   geom_boxplot() +
   labs(title = "Age Distribution by Cluster", x = "Cluster", y = "Age")
@@ -414,9 +416,7 @@ Actionable Recommendations
     • Why: Employees may hesitate to seek treatment due to stigma or fear of professional consequences.
     • How: • Create policies ensuring confidentiality for employees seeking mental health support.
     • Foster a supportive environment by training managers to recognize and address mental health concerns without judgment.
-```{r}
-
-```
+    
 Key Observations
 Commonality in Rules
 Both Apriori and FP-Growth identified the same top rules:
@@ -450,7 +450,6 @@ data <- data %>%
     treatment = as.factor(treatment)  # Ensure treatment is the target variable
   )
 #Split the data into training (70%) and testing (30%) sets
-library(caret)
 # Clean and consolidate Gender variable before splitting
 data$Gender <- case_when(
   data$Gender == "cis male" ~ "Male",
@@ -576,66 +575,61 @@ a.  Interpret Feature Importance
 
     • Use feature importance to understand which predictors drive treatment-seeking behavior:
 
-    ```{r}
-    # Load necessary library
-    library(randomForest)
+```{r}
+# Step 1: Train Random Forest Model with Importance
+rf_model <- randomForest(
+  treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
+  data = train,
+  ntree = 100,
+  importance = TRUE
+  )
 
-    # Step 1: Train Random Forest Model with Importance
-    rf_model <- randomForest(
-      treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
-      data = train,
-      ntree = 100,
-      importance = TRUE
-    )
+# Step 2: Extract Feature Importance
+importance_values <- importance(rf_model)
 
-    # Step 2: Extract Feature Importance
-    importance_values <- importance(rf_model)
+# Print the feature importance values
+cat("Feature Importance Values:\n")
+print(importance_values)
 
-    # Print the feature importance values
-    cat("Feature Importance Values:\n")
-    print(importance_values)
-
-    # Step 3: Visualize Feature Importance
-    varImpPlot(rf_model, main = "Feature Importance")
-    ```
+# Step 3: Visualize Feature Importance
+varImpPlot(rf_model, main = "Feature Importance")
+```
 
     #Weighted average ensemble
 
-    ```{r}
-    # Combine Logistic Regression and Random Forest Predictions
-    # Logistic regression predicted probabilities
-    log_probs <- predict(log_model, newdata = test, type = "response")
+```{r}
+# Combine Logistic Regression and Random Forest Predictions
+# Logistic regression predicted probabilities
+log_probs <- predict(log_model, newdata = test, type = "response")
 
-    # Random forest predicted probabilities
-    rf_probs <- predict(rf_model, newdata = test, type = "prob")[, 2]  # Probability for "Yes"
+# Random forest predicted probabilities
+rf_probs <- predict(rf_model, newdata = test, type = "prob")[, 2]  # Probability for "Yes"
 
-    # Weighted average of probabilities
-    # Assign weights: 0.6 for logistic regression, 0.4 for random forest
-    combined_probs <- 0.6 * log_probs + 0.4 * rf_probs
+# Weighted average of probabilities
+# Assign weights: 0.6 for logistic regression, 0.4 for random forest
+combined_probs <- 0.6 * log_probs + 0.4 * rf_probs
 
-    # Convert combined probabilities to class predictions
-    combined_predictions <- ifelse(combined_probs > 0.5, "Yes", "No")
-    combined_predictions <- as.factor(combined_predictions)
+# Convert combined probabilities to class predictions
+combined_predictions <- ifelse(combined_probs > 0.5, "Yes", "No")
+combined_predictions <- as.factor(combined_predictions)
 
-    # Evaluate Ensemble Predictions
-    # Confusion Matrix
-    library(caret)
-    conf_matrix_ensemble <- confusionMatrix(combined_predictions, test$treatment)
-    print(conf_matrix_ensemble)
+# Evaluate Ensemble Predictions
+# Confusion Matrix
+conf_matrix_ensemble <- confusionMatrix(combined_predictions, test$treatment)
+print(conf_matrix_ensemble)
 
-    # ROC Curve and AUC for Ensemble
-    library(ROCR)
-    pred_ensemble <- prediction(combined_probs, as.numeric(test$treatment == "Yes"))
-    perf_ensemble <- performance(pred_ensemble, "tpr", "fpr")
+# ROC Curve and AUC for Ensemble
+pred_ensemble <- prediction(combined_probs, as.numeric(test$treatment == "Yes"))
+perf_ensemble <- performance(pred_ensemble, "tpr", "fpr")
 
-    # Plot ROC Curve
-    plot(perf_ensemble, col = "blue", main = "ROC Curve for Ensemble Model")
-    abline(a = 0, b = 1, lty = 2, col = "red")  # Add diagonal reference line
+# Plot ROC Curve
+plot(perf_ensemble, col = "blue", main = "ROC Curve for Ensemble Model")
+abline(a = 0, b = 1, lty = 2, col = "red")  # Add diagonal reference line
 
-    # Calculate AUC
-    auc_ensemble <- performance(pred_ensemble, measure = "auc")
-    cat("Ensemble Model AUC:", auc_ensemble@y.values[[1]], "\n")
-    ```
+# Calculate AUC
+auc_ensemble <- performance(pred_ensemble, measure = "auc")
+cat("Ensemble Model AUC:", auc_ensemble@y.values[[1]], "\n")
+```
 
     1.  Accuracy: • The ensemble model achieved an accuracy of 76.06%, which is an improvement compared to the standalone Logistic Regression and Random Forest models.
     2.  AUC (Area Under the ROC Curve): • The ensemble model produced an AUC of 0.797, reflecting strong predictive power. • This indicates that the ensemble model is better at distinguishing between individuals likely to seek treatment and those who are not.
