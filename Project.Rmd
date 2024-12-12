@@ -1,6 +1,9 @@
 ---
 title: "Mental Health Analytics in Work Place"
 author: "Jayneet Jain,Mihika kubadia,Spoorthy Nagendra"
+execute: 
+  warning: false
+  message: false
 output:
   word_document: default
   html_document: default
@@ -15,7 +18,7 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r,warning=FALSE}
 # Load necessary libraries
 if (!require("pacman")) 
   install.packages("pacman")
@@ -38,7 +41,7 @@ pacman::p_load(ggplot2,
 )
 ```
 
-```{r}
+```{r,warning=FALSE}
 # Load data
 data <- read.csv("survey.csv")
 # Get the unique data types
@@ -53,7 +56,7 @@ head(data)
 summary(data)
 ```
 
-```{r}
+```{r,warning=FALSE}
 # Summary statistics for the entire dataset
 summary(data)
 
@@ -81,7 +84,7 @@ categorical_summary <- data %>%
 print("Summary for categorical variables:")
 print(categorical_summary)
 ```
-```{r}
+```{r,warning=FALSE}
 # Convert categorical columns to factors
 data$Gender <- as.factor(data$Gender)
 data$family_history <- as.factor(data$family_history)
@@ -91,7 +94,7 @@ data$work_interfere <- as.factor(data$work_interfere)
 
 k-means
 
-```{r}
+```{r,warning=FALSE}
 # Define a mode imputation function
 impute_mode <- function(x) {
   mode_val <- names(sort(table(x), decreasing = TRUE))[1]
@@ -202,7 +205,7 @@ After applying K-means clustering to the dataset, the following insights and con
 
 Visualize the Results: • Create bar plots or boxplots to visually compare clusters across key attributes.
 
-```{r}
+```{r,warning=FALSE}
 ggplot(data, aes(x = Cluster, y = Age, fill = Cluster)) +
   geom_boxplot() +
   labs(title = "Age Distribution by Cluster", x = "Cluster", y = "Age")
@@ -212,7 +215,7 @@ ggplot(data, aes(x = Cluster, fill = work_interfere)) +
   labs(title = "Work Interference by Cluster", x = "Cluster", y = "Proportion")
 ```
 Hierarchical Clustering
-```{r}
+```{r,warning=FALSE}
 set.seed(123)
 data_sample <- data_scaled[sample(1:nrow(data_scaled), 100), ]  # Randomly sample 100 rows
 dist_sample <- dist(data_sample)
@@ -235,7 +238,7 @@ Steps:
 •   Convert these columns to a transactions object.
 ```
 
-```{r}
+```{r,warning=FALSE}
 # Select relevant columns and convert to factors
 data_arules <- data |>
   select(family_history, treatment, care_options, work_interfere) |>
@@ -250,7 +253,7 @@ data_transactions <- as(data_arules, "transactions")
 •   Use the apriori algorithm to find frequent patterns and rules.
 ```
 
-```{r}
+```{r,warning=FALSE}
 rules <- apriori(data_transactions, parameter = list(supp = 0.1, conf = 0.8))
 inspect(head(rules))
 plot(rules, method = "graph", control = list(type = "items"))
@@ -279,7 +282,7 @@ Next Steps
 •   Inspect and summarize the strongest association rules based on lift:    
 ```
 
-```{r}
+```{r,warning=FALSE}
 inspect(sort(rules, by = "lift")[1:5])  # View the top 5 rules by lift
 ```
 
@@ -380,7 +383,7 @@ Key Takeaways
 •   Visualize only the strongest rules or a specific subset for clarity:
 ```
 
-```{r}
+```{r,warning=FALSE}
 strong_rules <- subset(rules, lift > 1.5 & confidence > 0.8)
 plot(strong_rules, method = "graph", control = list(type = "items"))
 ```
@@ -440,7 +443,7 @@ Integrating Recommendations into Classification Analysis Feature Engineering
 
 Incorporate key insights and predictors into the dataset: Ensure categorical variables like family_history, work_interfere, and care_options are converted to factors:
 
-```{r}
+```{r,warning=FALSE}
 data$Cluster <- as.factor(kmeans_result$cluster)#	Add Cluster assignments from the clustering analysis as a feature
 data <- data %>%
   mutate(
@@ -467,7 +470,7 @@ test <- data[-trainIndex, ]
 
 #Logistic regression
 
-```{r}
+```{r,warning=FALSE}
 # Train logistic regression model
 log_model <- glm(
   treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
@@ -491,7 +494,7 @@ log_predicted_class <- as.factor(log_predicted_class)
 
 #Random forest
 
-```{r}
+```{r,warning=FALSE}
 # Train random forest model
 rf_model <- randomForest(
   treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
@@ -508,7 +511,7 @@ Evaluate Model Performance
 
 a.  Confusion Matrix
 
-```{r}
+```{r,warning=FALSE}
 # Logistic Regression
 confusionMatrix(log_predicted_class, test$treatment)
 
@@ -518,7 +521,7 @@ confusionMatrix(rf_predicted, test$treatment)
 
 ROC curve and AUC
 
-```{r}
+```{r,warning=FALSE}
 # Step 1: Inspect Predictions and True Labels
 # Ensure predictions and true labels are clean and consistent
 print("Inspecting Predictions and True Labels...")
@@ -575,7 +578,7 @@ a.  Interpret Feature Importance
 
     • Use feature importance to understand which predictors drive treatment-seeking behavior:
 
-```{r}
+```{r,warning=FALSE}
 # Step 1: Train Random Forest Model with Importance
 rf_model <- randomForest(
   treatment ~ family_history + work_interfere + care_options + Cluster + Age + Gender,
@@ -597,7 +600,7 @@ varImpPlot(rf_model, main = "Feature Importance")
 
     #Weighted average ensemble
 
-```{r}
+```{r,warning=FALSE}
 # Combine Logistic Regression and Random Forest Predictions
 # Logistic regression predicted probabilities
 log_probs <- predict(log_model, newdata = test, type = "response")
@@ -673,7 +676,7 @@ Age: • Surprisingly, the contribution of Age is minimal, as indicated by low i
 
 6.
 Gender: • Gender contributions appear insignificant (possibly due to inconsistent or unclear gender labels in the dataset).
-```{r}
+```{r,warning=FALSE}
 # Apriori Algorithm
 apriori_rules <- apriori(
   data_transactions,
